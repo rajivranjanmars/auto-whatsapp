@@ -1,5 +1,4 @@
 import Fastify from 'fastify';
-import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { chromium, BrowserContext, Page } from 'playwright';
 import * as fs from 'fs';
@@ -906,9 +905,6 @@ async function sendMessageWithMedia(
     throw error;
   }
 }
-
-// Register CORS
-app.register(cors, { origin: true });
 
 // Register multipart for file uploads
 app.register(multipart, {

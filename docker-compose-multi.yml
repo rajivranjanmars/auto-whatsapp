@@ -1,0 +1,202 @@
+services:
+  whatsapp-api-1:
+    build: .
+    container_name: whatsapp-api-1
+    ports:
+      - "4600:3000"
+    volumes:
+      - whatsapp_data_1:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  whatsapp-api-2:
+    build: .
+    container_name: whatsapp-api-2
+    ports:
+      - "4601:3000"
+    volumes:
+      - whatsapp_data_2:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  whatsapp-api-3:
+    build: .
+    container_name: whatsapp-api-3
+    ports:
+      - "4602:3000"
+    volumes:
+      - whatsapp_data_3:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  whatsapp-api-4:
+    build: .
+    container_name: whatsapp-api-4
+    ports:
+      - "4603:3000"
+    volumes:
+      - whatsapp_data_4:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  whatsapp-api-5:
+    build: .
+    container_name: whatsapp-api-5
+    ports:
+      - "4604:3000"
+    volumes:
+      - whatsapp_data_5:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  whatsapp-api-6:
+    build: .
+    container_name: whatsapp-api-6
+    ports:
+      - "4605:3000"
+    volumes:
+      - whatsapp_data_6:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  whatsapp-api-7:
+    build: .
+    container_name: whatsapp-api-7
+    ports:
+      - "4606:3000"
+    volumes:
+      - whatsapp_data_7:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  whatsapp-api-8:
+    build: .
+    container_name: whatsapp-api-8
+    ports:
+      - "4607:3000"
+    volumes:
+      - whatsapp_data_8:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  whatsapp-api-9:
+    build: .
+    container_name: whatsapp-api-9
+    ports:
+      - "4608:3000"
+    volumes:
+      - whatsapp_data_9:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  whatsapp-api-10:
+    build: .
+    container_name: whatsapp-api-10
+    ports:
+      - "4609:3000"
+    volumes:
+      - whatsapp_data_10:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+volumes:
+  whatsapp_data_1:
+  whatsapp_data_2:
+  whatsapp_data_3:
+  whatsapp_data_4:
+  whatsapp_data_5:
+  whatsapp_data_6:
+  whatsapp_data_7:
+  whatsapp_data_8:
+  whatsapp_data_9:
+  whatsapp_data_10:
