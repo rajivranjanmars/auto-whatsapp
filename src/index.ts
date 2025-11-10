@@ -995,12 +995,13 @@ app.post<{
       });
     }
 
-    if (!isWhatsAppReady) {
-      return reply.code(503).send({
-        status: 'error',
-        message: 'WhatsApp is not ready. Please authenticate using phone-login (POST /login) and then verify (POST /verify).',
-      });
-    }
+    // Removed auth check - will attempt to send regardless
+    // if (!isWhatsAppReady) {
+    //   return reply.code(503).send({
+    //     status: 'error',
+    //     message: 'WhatsApp is not ready. Please authenticate using phone-login (POST /login) and then verify (POST /verify).',
+    //   });
+    // }
 
     await sendMessage(phone_number, message);
 
@@ -1130,12 +1131,13 @@ app.post('/send-media', async (request, reply) => {
       });
     }
 
-    if (!isWhatsAppReady) {
-      return reply.code(503).send({
-        status: 'error',
-        message: 'WhatsApp is not ready. Please authenticate first.'
-      });
-    }
+    // Removed auth check - will attempt to send regardless
+    // if (!isWhatsAppReady) {
+    //   return reply.code(503).send({
+    //     status: 'error',
+    //     message: 'WhatsApp is not ready. Please authenticate first.'
+    //   });
+    // }
 
     // Save the file with timestamp
     const originalFilename = data.filename;
