@@ -1442,25 +1442,225 @@ app.get('/dump', async (request, reply) => {
   }
 });
 
-// Debug endpoint: take screenshot of current WhatsApp page
+// Screenshot page - shows current WhatsApp Web state
 app.get('/screenshot', async (request, reply) => {
   try {
     if (!page) {
-      return reply.code(503).send({ success: false, message: 'WhatsApp not initialized' });
+      return reply.type('text/html').send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Screenshot - WhatsApp API</title>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              margin: 0;
+              padding: 20px;
+              min-height: 100vh;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+            }
+            .container {
+              background: white;
+              border-radius: 20px;
+              padding: 40px;
+              box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+              text-align: center;
+              max-width: 600px;
+            }
+            .error { color: #e74c3c; }
+            button {
+              background: #25d366;
+              color: white;
+              border: none;
+              padding: 12px 30px;
+              border-radius: 25px;
+              font-size: 16px;
+              cursor: pointer;
+              margin-top: 20px;
+            }
+            button:hover { background: #128c7e; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1 class="error">❌ Error</h1>
+            <p>WhatsApp not initialized</p>
+            <button onclick="window.location.reload()">Retry</button>
+          </div>
+        </body>
+        </html>
+      `);
     }
     
     console.log('📸 Taking screenshot of WhatsApp Web page...');
     const screenshot = await page.screenshot({ type: 'png', fullPage: false });
     const base64 = screenshot.toString('base64');
     
-    return reply.code(200).send({
-      success: true,
-      screenshot: `data:image/png;base64,${base64}`,
-      message: 'Screenshot captured successfully'
-    });
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Screenshot - WhatsApp API</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      max-width: 95%;
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    .timestamp {
+      color: #7f8c8d;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .screenshot-wrapper {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 15px;
+      display: inline-block;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .screenshot {
+      max-width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      display: block;
+    }
+    .buttons {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #25d366;
+      color: white;
+      border: none;
+      padding: 12px 25px;
+      border-radius: 25px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    button:hover {
+      background: #128c7e;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+    .refresh-btn { background: #3498db; }
+    .refresh-btn:hover { background: #2980b9; }
+    .status-btn { background: #9b59b6; }
+    .status-btn:hover { background: #8e44ad; }
+    .footer {
+      margin-top: 15px;
+      color: #7f8c8d;
+      font-size: 12px;
+    }
+  </style>
+  <script>
+    // Auto-refresh every 5 seconds
+    setTimeout(() => window.location.reload(), 5000);
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>📸 WhatsApp Web Screenshot</h1>
+    <div class="timestamp">Captured at: ${new Date().toLocaleString()}</div>
+    
+    <div class="screenshot-wrapper">
+      <img src="data:image/png;base64,${base64}" alt="WhatsApp Screenshot" class="screenshot">
+    </div>
+    
+    <div class="buttons">
+      <button onclick="window.location.reload()" class="refresh-btn">🔄 Refresh</button>
+      <button onclick="window.location.href='/status'" class="status-btn">📊 Check Status</button>
+      <button onclick="window.location.href='/qr-page'">📱 QR Code</button>
+    </div>
+    
+    <div class="footer">
+      <small>⏱️ Auto-refreshing in 5 seconds...</small>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+    
+    return reply.type('text/html').send(html);
   } catch (error) {
     console.error('❌ Failed to take screenshot:', error);
-    return reply.code(500).send({ success: false, message: `Error: ${error}` });
+    return reply.type('text/html').send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Screenshot Error - WhatsApp API</title>
+        <meta charset="UTF-8">
+        <style>
+          body {
+            font-family: sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+          }
+          .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          }
+          .error { color: #e74c3c; }
+          button {
+            background: #25d366;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+          }
+          button:hover { background: #128c7e; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1 class="error">❌ Screenshot Error</h1>
+          <p>${String(error)}</p>
+          <button onclick="window.location.reload()">Try Again</button>
+        </div>
+      </body>
+      </html>
+    `);
   }
 });
 
