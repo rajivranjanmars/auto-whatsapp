@@ -27,6 +27,7 @@ echo "🎯 Changes applied:"
 echo "  - Removed authentication checks from /message endpoint"
 echo "  - Removed authentication checks from /send-media endpoint"
 echo "  - Messages will now send even if auth detection fails"
+echo "  - Screenshot endpoint now shows HTML page (like QR page)"
 echo ""
 echo "📱 Test with:"
 echo '  curl -X POST http://localhost:4600/message -H "Content-Type: application/json" -d '"'"'{"phone_number":"918540029641","message":"Test!"}'"'"''
