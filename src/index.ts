@@ -1,8 +1,10 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import { chromium, BrowserContext, Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
+import { pipeline } from 'stream/promises';
 
 const app = Fastify({ logger: true });
 
@@ -748,8 +750,217 @@ async function sendMessage(phoneNumber: string, message: string): Promise<boolea
   }
 }
 
+// Send message with media function
+async function sendMessageWithMedia(
+  phoneNumber: string, 
+  mediaPath: string, 
+  caption?: string
+): Promise<boolean> {
+  if (!page) {
+    throw new Error('WhatsApp not initialized');
+  }
+
+  try {
+    // Format phone number (remove any non-digit characters)
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    
+    // Navigate to chat using WhatsApp's direct URL
+    const chatUrl = `https://web.whatsapp.com/send?phone=${cleanPhone}`;
+    console.log(`📞 Opening chat for: ${cleanPhone}`);
+    await page.goto(chatUrl, { waitUntil: 'networkidle' });
+    
+    // Wait a bit for page to fully load and chat to open
+    await page.waitForTimeout(5000);
+    
+    // Wait for the message input box to appear (indicates chat is loaded)
+    const inputSelector = 'div[contenteditable="true"][data-tab="10"]';
+    await page.waitForSelector(inputSelector, { timeout: 15000 });
+    console.log('✅ Chat loaded successfully');
+    
+    // Find and click the attachment button (paperclip icon)
+    console.log('📎 Looking for attachment button...');
+    const attachmentButtonSelectors = [
+      'span[data-icon="plus"]',
+      'span[data-icon="attach-menu-plus"]',
+      'div[title="Attach"]',
+      'button[aria-label="Attach"]',
+      'div[role="button"][aria-label="Attach"]',
+      'span[data-testid="clip"]'
+    ];
+    
+    let attachmentButton = null;
+    for (const selector of attachmentButtonSelectors) {
+      try {
+        attachmentButton = page.locator(selector).first();
+        if (await attachmentButton.isVisible({ timeout: 2000 })) {
+          console.log(`   ✅ Found attachment button: ${selector}`);
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+    
+    if (!attachmentButton || !await attachmentButton.isVisible()) {
+      throw new Error('Could not find attachment button');
+    }
+    
+    await attachmentButton.click();
+    console.log('✅ Clicked attachment button');
+    await page.waitForTimeout(1000);
+    
+    // Find the file input for media upload
+    console.log('📁 Looking for file input...');
+    const fileInputSelectors = [
+      'input[type="file"][accept*="image"]',
+      'input[type="file"][accept*="video"]',
+      'input[type="file"]'
+    ];
+    
+    let fileInput = null;
+    for (const selector of fileInputSelectors) {
+      try {
+        const input = page.locator(selector).first();
+        if (await input.count() > 0) {
+          fileInput = input;
+          console.log(`   ✅ Found file input: ${selector}`);
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+    
+    if (!fileInput) {
+      throw new Error('Could not find file input for media upload');
+    }
+    
+    // Upload the file
+    console.log(`📤 Uploading file: ${mediaPath}`);
+    await fileInput.setInputFiles(mediaPath);
+    await page.waitForTimeout(2000);
+    
+    // Add caption if provided
+    if (caption) {
+      console.log('✍️ Adding caption...');
+      const captionSelectors = [
+        'div[contenteditable="true"][data-tab="10"]',
+        'div[contenteditable="true"].copyable-text',
+        'div[role="textbox"]'
+      ];
+      
+      let captionInput = null;
+      for (const selector of captionSelectors) {
+        try {
+          captionInput = page.locator(selector).first();
+          if (await captionInput.isVisible({ timeout: 2000 })) {
+            console.log(`   ✅ Found caption input: ${selector}`);
+            break;
+          }
+        } catch {
+          continue;
+        }
+      }
+      
+      if (captionInput && await captionInput.isVisible()) {
+        await captionInput.fill(caption);
+        await page.waitForTimeout(500);
+      } else {
+        console.log('⚠️ Could not find caption input, sending without caption');
+      }
+    }
+    
+    // Find and click the send button
+    console.log('📤 Looking for send button...');
+    const sendButtonSelectors = [
+      'span[data-icon="send"]',
+      'button[aria-label="Send"]',
+      'div[role="button"][aria-label="Send"]',
+      'span[data-testid="send"]'
+    ];
+    
+    let sendButton = null;
+    for (const selector of sendButtonSelectors) {
+      try {
+        sendButton = page.locator(selector).first();
+        if (await sendButton.isVisible({ timeout: 2000 })) {
+          console.log(`   ✅ Found send button: ${selector}`);
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+    
+    if (!sendButton || !await sendButton.isVisible()) {
+      throw new Error('Could not find send button');
+    }
+    
+    await sendButton.click();
+    console.log('✅ Media message sent successfully!');
+    await page.waitForTimeout(3000); // Wait for message to send
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send media message:', error);
+    throw error;
+  }
+}
+
 // Register CORS
 app.register(cors, { origin: true });
+
+// Register multipart for file uploads
+app.register(multipart, {
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB max file size
+    files: 1 // Only 1 file per request
+  }
+});
+
+// File upload endpoint
+app.post('/upload', async (request, reply) => {
+  try {
+    const data = await request.file();
+    
+    if (!data) {
+      return reply.code(400).send({
+        status: 'error',
+        message: 'No file uploaded'
+      });
+    }
+
+    // Get filename from the upload, or generate one
+    const originalFilename = data.filename;
+    const timestamp = Date.now();
+    const filename = `${timestamp}-${originalFilename}`;
+    const filepath = path.join(DATA_DIR, filename);
+
+    console.log(`📁 Uploading file: ${originalFilename} -> ${filename}`);
+
+    // Save the file
+    await pipeline(data.file, fs.createWriteStream(filepath));
+
+    console.log(`✅ File saved: ${filepath}`);
+
+    return reply.code(200).send({
+      status: 'success',
+      message: 'File uploaded successfully',
+      filename: filename,
+      original_filename: originalFilename,
+      file_path: `/app/data/${filename}`,
+      size: fs.statSync(filepath).size,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ File upload failed:', error);
+    return reply.code(500).send({
+      status: 'error',
+      message: 'File upload failed',
+      error: String(error)
+    });
+  }
+});
 
 // Health check endpoint
 app.get('/health', async (request, reply) => {
@@ -846,6 +1057,123 @@ app.post<{
       status: 'error',
       message: 'Failed to send message',
       error: String(error),
+    });
+  }
+});
+
+// Send message with media endpoint
+app.post<{
+  Body: {
+    phone_number: string;
+    media_path: string;
+    caption?: string;
+  };
+}>('/message-media', async (request, reply) => {
+  try {
+    const { phone_number, media_path, caption } = request.body;
+
+    if (!phone_number || !media_path) {
+      return reply.code(400).send({
+        status: 'error',
+        message: 'Missing required fields: phone_number and media_path',
+      });
+    }
+
+    if (!isWhatsAppReady) {
+      return reply.code(503).send({
+        status: 'error',
+        message: 'WhatsApp is not ready. Please authenticate first.',
+      });
+    }
+
+    console.log(`📱 Sending media message to ${phone_number}`);
+    console.log(`   Media: ${media_path}`);
+    if (caption) console.log(`   Caption: ${caption}`);
+
+    await sendMessageWithMedia(phone_number, media_path, caption);
+
+    return reply.code(200).send({
+      status: 'success',
+      message: 'Media message sent successfully',
+      phone_number,
+      media_path,
+      caption: caption || null,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error in /message-media endpoint:', error);
+    return reply.code(500).send({
+      status: 'error',
+      message: 'Failed to send media message',
+      error: String(error),
+    });
+  }
+});
+
+// Upload and send media in one request
+app.post('/send-media', async (request, reply) => {
+  try {
+    const data = await request.file();
+    
+    if (!data) {
+      return reply.code(400).send({
+        status: 'error',
+        message: 'No file uploaded. Use multipart/form-data with field name "file"'
+      });
+    }
+
+    // Get phone number and caption from fields
+    const fields = data.fields as any;
+    const phoneNumber = fields?.phone_number?.value || fields?.phoneNumber?.value;
+    const caption = fields?.caption?.value || '';
+
+    if (!phoneNumber) {
+      return reply.code(400).send({
+        status: 'error',
+        message: 'Missing phone_number field'
+      });
+    }
+
+    if (!isWhatsAppReady) {
+      return reply.code(503).send({
+        status: 'error',
+        message: 'WhatsApp is not ready. Please authenticate first.'
+      });
+    }
+
+    // Save the file with timestamp
+    const originalFilename = data.filename;
+    const timestamp = Date.now();
+    const filename = `${timestamp}-${originalFilename}`;
+    const filepath = path.join(DATA_DIR, filename);
+
+    console.log(`📁 Uploading file: ${originalFilename} -> ${filename}`);
+    console.log(`📱 Will send to: ${phoneNumber}`);
+    if (caption) console.log(`   Caption: ${caption}`);
+
+    // Save the file
+    await pipeline(data.file, fs.createWriteStream(filepath));
+    console.log(`✅ File saved: ${filepath}`);
+
+    // Send the message with the uploaded file
+    await sendMessageWithMedia(phoneNumber, filepath, caption);
+
+    return reply.code(200).send({
+      status: 'success',
+      message: 'File uploaded and sent successfully',
+      phone_number: phoneNumber,
+      filename: filename,
+      original_filename: originalFilename,
+      caption: caption || null,
+      file_size: fs.statSync(filepath).size,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Upload and send failed:', error);
+    return reply.code(500).send({
+      status: 'error',
+      message: 'Failed to upload and send media',
+      error: String(error)
     });
   }
 });
