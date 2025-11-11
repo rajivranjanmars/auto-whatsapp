@@ -1076,12 +1076,13 @@ app.post<{
       });
     }
 
-    if (!isWhatsAppReady) {
-      return reply.code(503).send({
-        status: 'error',
-        message: 'WhatsApp is not ready. Please authenticate first.',
-      });
-    }
+    // Removed auth check - will attempt to send regardless
+    // if (!isWhatsAppReady) {
+    //   return reply.code(503).send({
+    //     status: 'error',
+    //     message: 'WhatsApp is not ready. Please authenticate first.',
+    //   });
+    // }
 
     console.log(`📱 Sending media message to ${phone_number}`);
     console.log(`   Media: ${media_path}`);
@@ -1172,6 +1173,71 @@ app.post('/send-media', async (request, reply) => {
       status: 'error',
       message: 'Failed to upload and send media',
       error: String(error)
+    });
+  }
+});
+
+// Simple file sender - just provide filename from /app/data folder
+app.post<{
+  Body: {
+    phone_number: string;
+    file: string;
+    message?: string;
+  };
+}>('/send-file', async (request, reply) => {
+  try {
+    const { phone_number, file, message } = request.body;
+
+    if (!phone_number || !file) {
+      return reply.code(400).send({
+        status: 'error',
+        message: 'Missing required fields: phone_number and file',
+        example: {
+          phone_number: '919876543210',
+          file: '1.png',
+          message: 'Optional caption message'
+        }
+      });
+    }
+
+    // Construct the full path to the file in the data directory
+    const mediaPath = path.join(DATA_DIR, file);
+    
+    // Check if file exists
+    if (!fs.existsSync(mediaPath)) {
+      return reply.code(404).send({
+        status: 'error',
+        message: `File not found: ${file}`,
+        full_path: mediaPath,
+        hint: 'Make sure the file exists in the data folder'
+      });
+    }
+
+    console.log(`📱 Sending file to ${phone_number}`);
+    console.log(`   File: ${file} (${mediaPath})`);
+    if (message) console.log(`   Caption: ${message}`);
+
+    // Send the message with media
+    await sendMessageWithMedia(phone_number, mediaPath, message);
+
+    const fileStats = fs.statSync(mediaPath);
+    
+    return reply.code(200).send({
+      status: 'success',
+      message: 'File sent successfully',
+      phone_number,
+      file,
+      full_path: mediaPath,
+      caption: message || null,
+      file_size: fileStats.size,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error in /send-file endpoint:', error);
+    return reply.code(500).send({
+      status: 'error',
+      message: 'Failed to send file',
+      error: String(error),
     });
   }
 });
