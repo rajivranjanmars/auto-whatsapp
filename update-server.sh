@@ -1,6 +1,7 @@
 #!/bin/bash
-# Quick Update Script for Oracle Server
+# Full Update Script for Oracle Server (with no-cache rebuild)
 # Run this on mars@oracle:~/auto-whatsapp
+# NOTE: Preserves WhatsApp sessions - no need to scan QR codes again!
 
 echo "🔄 Updating WhatsApp API with latest code..."
 
@@ -8,13 +9,21 @@ echo "🔄 Updating WhatsApp API with latest code..."
 echo "📥 Pulling latest changes from GitHub..."
 git pull
 
-# Rebuild all instances
-echo "🔨 Rebuilding Docker images..."
-docker-compose -f docker-compose-multi.yml build
+# Rebuild all instances (with no cache to ensure fresh build)
+echo "🔨 Rebuilding Docker images (no cache)..."
+docker-compose -f docker-compose-multi.yml build --no-cache
 
-# Restart all instances
-echo "🔄 Restarting all instances..."
-docker-compose -f docker-compose-multi.yml restart
+# Stop containers but keep volumes (preserves WhatsApp sessions)
+echo "🛑 Stopping containers (keeping volumes)..."
+docker-compose -f docker-compose-multi.yml stop
+
+# Remove old containers (but NOT volumes)
+echo "�️ Removing old containers..."
+docker-compose -f docker-compose-multi.yml rm -f
+
+# Start all instances with new images (volumes persist)
+echo "🚀 Starting all instances with new images..."
+docker-compose -f docker-compose-multi.yml up -d
 
 echo ""
 echo "✅ Update complete!"
@@ -23,11 +32,14 @@ echo "📊 Container Status:"
 docker-compose -f docker-compose-multi.yml ps
 
 echo ""
-echo "🎯 Changes applied:"
-echo "  - Removed authentication checks from /message endpoint"
-echo "  - Removed authentication checks from /send-media endpoint"
-echo "  - Messages will now send even if auth detection fails"
-echo "  - Screenshot endpoint now shows HTML page (like QR page)"
+echo "🎯 Latest Features:"
+echo "  - ✅ /screenshot-page - HTML viewer with auto-refresh"
+echo "  - ✅ /message - Send text messages (no auth check)"
+echo "  - ✅ /send-media - Upload & send media in one request"
+echo "  - ✅ /message-media - Send media with file path"
+echo "  - ✅ Phone login flow with verification codes"
 echo ""
-echo "📱 Test with:"
+echo "� WhatsApp sessions preserved - no need to re-authenticate!"
+echo ""
+echo "�📱 Test with:"
 echo '  curl -X POST http://localhost:4600/message -H "Content-Type: application/json" -d '"'"'{"phone_number":"918540029641","message":"Test!"}'"'"''
