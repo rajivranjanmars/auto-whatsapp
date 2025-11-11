@@ -1442,8 +1442,37 @@ app.get('/dump', async (request, reply) => {
   }
 });
 
-// Screenshot page - shows current WhatsApp Web state
+// Raw screenshot endpoint - returns base64 JSON (like /qr)
 app.get('/screenshot', async (request, reply) => {
+  try {
+    if (!page) {
+      return reply.code(503).send({ 
+        success: false, 
+        message: 'WhatsApp not initialized' 
+      });
+    }
+    
+    console.log('📸 Taking screenshot of WhatsApp Web page...');
+    const screenshot = await page.screenshot({ type: 'png', fullPage: false });
+    const base64 = screenshot.toString('base64');
+    
+    return reply.code(200).send({
+      success: true,
+      screenshot: `data:image/png;base64,${base64}`,
+      message: 'Screenshot captured successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Failed to take screenshot:', error);
+    return reply.code(500).send({ 
+      success: false, 
+      message: `Error: ${error}` 
+    });
+  }
+});
+
+// Screenshot page - HTML view with auto-refresh (like /qr-page)
+app.get('/screenshot-page', async (request, reply) => {
   try {
     if (!page) {
       return reply.type('text/html').send(`
