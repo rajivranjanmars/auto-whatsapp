@@ -1,0 +1,7 @@
+ Test Media File from Instance 1!
+
+Timestamp: 2025-11-10 19:17:27
+Server: Oracle Cloud (129.154.244.250:4600)
+Instance: whatsapp-api-1
+
+This is a test media upload via the WhatsApp API!
