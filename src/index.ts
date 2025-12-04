@@ -1276,7 +1276,7 @@ app.post<{
       });
     }
 
-    if (!page) {
+    if (!page || !browser) {
       return reply.code(503).send({
         status: 'error',
         message: 'WhatsApp page not initialized',
@@ -1287,101 +1287,115 @@ app.post<{
     if (message) console.log(`   Message: ${message}`);
     if (file) console.log(`   File: ${file}`);
 
-    // Navigate to the group link
-    await page.goto(group_link, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForTimeout(3000);
+    // Create a new page in a new context for group operations (to avoid breaking main session)
+    const groupContext = await browser.newContext();
+    const groupPage = await groupContext.newPage();
 
-    // Check if we need to join the group first
     try {
-      const joinButton = page.locator('button:has-text("Join Group"), button:has-text("Join group"), a:has-text("Join Group"), a:has-text("Join group")').first();
-      const isJoinVisible = await joinButton.isVisible({ timeout: 3000 });
-      
-      if (isJoinVisible) {
-        console.log('   Joining group...');
-        await joinButton.click();
-        await page.waitForTimeout(5000);
+      // Navigate to the group link in the new page
+      await groupPage.goto(group_link, { waitUntil: 'networkidle', timeout: 30000 });
+      await groupPage.waitForTimeout(3000);
+
+      // Check if we need to join the group first
+      try {
+        const joinButton = groupPage.locator('button:has-text("Join Group"), button:has-text("Join group"), a:has-text("Join Group"), a:has-text("Join group")').first();
+        const isJoinVisible = await joinButton.isVisible({ timeout: 3000 });
+        
+        if (isJoinVisible) {
+          console.log('   Joining group...');
+          await joinButton.click();
+          await groupPage.waitForTimeout(5000);
+        }
+      } catch (e) {
+        console.log('   Already in group or join button not found');
       }
-    } catch (e) {
-      console.log('   Already in group or join button not found');
-    }
 
-    // Wait for chat to load
-    await page.waitForTimeout(2000);
+      // Wait for chat to load
+      await groupPage.waitForTimeout(2000);
 
-    // If file is provided, send it with optional caption
-    if (file) {
-      const filePath = path.isAbsolute(file) ? file : path.join(DATA_DIR, file);
-      
-      if (!fs.existsSync(filePath)) {
-        return reply.code(404).send({
-          status: 'error',
-          message: 'File not found',
-          file: file,
+      // If file is provided, send it with optional caption
+      if (file) {
+        const filePath = path.isAbsolute(file) ? file : path.join(DATA_DIR, file);
+        
+        if (!fs.existsSync(filePath)) {
+          await groupContext.close();
+          return reply.code(404).send({
+            status: 'error',
+            message: 'File not found',
+            file: file,
+            full_path: filePath,
+          });
+        }
+
+        const stats = fs.statSync(filePath);
+        console.log(`   Attaching file (${stats.size} bytes)...`);
+
+        // Click attach button
+        const attachButton = groupPage.locator('span[data-icon="plus"], span[data-icon="attach-menu-plus"]').first();
+        await attachButton.click();
+        await groupPage.waitForTimeout(1000);
+
+        // Click document/photo option based on file type
+        const fileExt = path.extname(filePath).toLowerCase();
+        const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(fileExt);
+        
+        const fileInputSelector = isImage 
+          ? 'input[accept*="image"]'
+          : 'input[accept*="*"]';
+        
+        const fileInput = groupPage.locator(fileInputSelector).first();
+        await fileInput.setInputFiles(filePath);
+        await groupPage.waitForTimeout(2000);
+
+        // Add caption if provided
+        if (message) {
+          const captionBox = groupPage.locator('div[contenteditable="true"][data-tab="10"]').first();
+          await captionBox.fill(message);
+          await groupPage.waitForTimeout(500);
+        }
+
+        // Click send button
+        const sendButton = groupPage.locator('span[data-icon="send"]').first();
+        await sendButton.click();
+        await groupPage.waitForTimeout(2000);
+
+        await groupContext.close();
+
+        return reply.code(200).send({
+          status: 'success',
+          message: 'File sent to group successfully',
+          group_link,
+          file,
+          file_size: stats.size,
           full_path: filePath,
+          caption: message || null,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        // Send text message only
+        const messageBox = groupPage.locator('div[contenteditable="true"][data-tab="10"]').first();
+        await messageBox.waitFor({ state: 'visible', timeout: 10000 });
+        await messageBox.fill(message!);
+        await groupPage.waitForTimeout(500);
+
+        // Click send button
+        const sendButton = groupPage.locator('span[data-icon="send"]').first();
+        await sendButton.click();
+        await groupPage.waitForTimeout(2000);
+
+        await groupContext.close();
+
+        return reply.code(200).send({
+          status: 'success',
+          message: 'Message sent to group successfully',
+          group_link,
+          text: message,
+          timestamp: new Date().toISOString(),
         });
       }
-
-      const stats = fs.statSync(filePath);
-      console.log(`   Attaching file (${stats.size} bytes)...`);
-
-      // Click attach button
-      const attachButton = page.locator('span[data-icon="plus"], span[data-icon="attach-menu-plus"]').first();
-      await attachButton.click();
-      await page.waitForTimeout(1000);
-
-      // Click document/photo option based on file type
-      const fileExt = path.extname(filePath).toLowerCase();
-      const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(fileExt);
-      
-      const fileInputSelector = isImage 
-        ? 'input[accept*="image"]'
-        : 'input[accept*="*"]';
-      
-      const fileInput = page.locator(fileInputSelector).first();
-      await fileInput.setInputFiles(filePath);
-      await page.waitForTimeout(2000);
-
-      // Add caption if provided
-      if (message) {
-        const captionBox = page.locator('div[contenteditable="true"][data-tab="10"]').first();
-        await captionBox.fill(message);
-        await page.waitForTimeout(500);
-      }
-
-      // Click send button
-      const sendButton = page.locator('span[data-icon="send"]').first();
-      await sendButton.click();
-      await page.waitForTimeout(2000);
-
-      return reply.code(200).send({
-        status: 'success',
-        message: 'File sent to group successfully',
-        group_link,
-        file,
-        file_size: stats.size,
-        full_path: filePath,
-        caption: message || null,
-        timestamp: new Date().toISOString(),
-      });
-    } else {
-      // Send text message only
-      const messageBox = page.locator('div[contenteditable="true"][data-tab="10"]').first();
-      await messageBox.waitFor({ state: 'visible', timeout: 10000 });
-      await messageBox.fill(message!);
-      await page.waitForTimeout(500);
-
-      // Click send button
-      const sendButton = page.locator('span[data-icon="send"]').first();
-      await sendButton.click();
-      await page.waitForTimeout(2000);
-
-      return reply.code(200).send({
-        status: 'success',
-        message: 'Message sent to group successfully',
-        group_link,
-        text: message,
-        timestamp: new Date().toISOString(),
-      });
+    } catch (error) {
+      await groupContext.close();
+      throw error;
     }
   } catch (error) {
     console.error('Error in /send-group-message endpoint:', error);
