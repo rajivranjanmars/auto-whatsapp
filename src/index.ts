@@ -1288,25 +1288,66 @@ app.post<{
     if (file) console.log(`   File: ${file}`);
 
     // Navigate to the group link
-    await page.goto(group_link, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForTimeout(3000);
+    await page.goto(group_link, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(5000);
 
-    // Check if we need to join the group first
+    // Check if we need to join the group first (look for join button or "Join Group" text)
     try {
-      const joinButton = page.locator('button:has-text("Join Group"), button:has-text("Join group"), a:has-text("Join Group"), a:has-text("Join group")').first();
-      const isJoinVisible = await joinButton.isVisible({ timeout: 3000 });
+      // Try different selectors for join button
+      const joinSelectors = [
+        'div[role="button"]:has-text("Join group")',
+        'div[role="button"]:has-text("Join Group")',
+        'button:has-text("Join")',
+        'a:has-text("Join")',
+      ];
       
-      if (isJoinVisible) {
-        console.log('   Joining group...');
-        await joinButton.click();
-        await page.waitForTimeout(5000);
+      for (const selector of joinSelectors) {
+        try {
+          const joinButton = page.locator(selector).first();
+          const isVisible = await joinButton.isVisible({ timeout: 2000 });
+          if (isVisible) {
+            console.log('   Clicking join button...');
+            await joinButton.click();
+            await page.waitForTimeout(5000);
+            break;
+          }
+        } catch (e) {
+          // Continue to next selector
+        }
       }
     } catch (e) {
-      console.log('   Already in group or join button not found');
+      console.log('   Join button not found or already in group');
     }
 
-    // Wait for chat to load
-    await page.waitForTimeout(2000);
+    // Wait for the chat to fully load - try multiple message box selectors
+    const messageBoxSelectors = [
+      'div[contenteditable="true"][data-tab="10"]',
+      'div[contenteditable="true"][title="Type a message"]',
+      'footer div[contenteditable="true"]',
+      'div[data-testid="conversation-compose-box-input"]',
+    ];
+
+    let messageBox = null;
+    for (const selector of messageBoxSelectors) {
+      try {
+        const box = page.locator(selector).first();
+        await box.waitFor({ state: 'visible', timeout: 10000 });
+        messageBox = box;
+        console.log(`   Found message box with selector: ${selector}`);
+        break;
+      } catch (e) {
+        console.log(`   Selector ${selector} not found, trying next...`);
+      }
+    }
+
+    if (!messageBox) {
+      // Take a screenshot for debugging
+      console.log('   Could not find message box, taking debug screenshot...');
+      return reply.code(500).send({
+        status: 'error',
+        message: 'Could not find message input box. The group chat may not have loaded correctly.',
+      });
+    }
 
     // If file is provided, send it with optional caption
     if (file) {
@@ -1365,8 +1406,8 @@ app.post<{
       });
     } else {
       // Send text message only
-      const messageBox = page.locator('div[contenteditable="true"][data-tab="10"]').first();
-      await messageBox.waitFor({ state: 'visible', timeout: 10000 });
+      await messageBox.click();
+      await page.waitForTimeout(500);
       await messageBox.fill(message!);
       await page.waitForTimeout(500);
 
