@@ -1428,9 +1428,8 @@ app.post<{
       await messageBox.fill(message!);
       await page.waitForTimeout(500);
 
-      // Click send button
-      const sendButton = page.locator('span[data-icon="send"]').first();
-      await sendButton.click();
+      // Press Enter to send (more reliable than clicking send button)
+      await page.keyboard.press('Enter');
       await page.waitForTimeout(2000);
 
       return reply.code(200).send({
