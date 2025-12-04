@@ -1242,21 +1242,21 @@ app.post<{
   }
 });
 
-// Send message to WhatsApp group using invite link
+// Send message to WhatsApp group using group name search
 app.post<{
   Body: {
-    group_link: string;
+    group_name: string;
     message?: string;
     file?: string;
   };
 }>('/send-group-message', async (request, reply) => {
   try {
-    const { group_link, message, file } = request.body;
+    const { group_name, message, file } = request.body;
 
-    if (!group_link) {
+    if (!group_name) {
       return reply.code(400).send({
         status: 'error',
-        message: 'Missing required field: group_link',
+        message: 'Missing required field: group_name',
       });
     }
 
@@ -1267,15 +1267,6 @@ app.post<{
       });
     }
 
-    // Validate group link format
-    const groupLinkRegex = /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+$/;
-    if (!groupLinkRegex.test(group_link)) {
-      return reply.code(400).send({
-        status: 'error',
-        message: 'Invalid WhatsApp group invite link format',
-      });
-    }
-
     if (!page) {
       return reply.code(503).send({
         status: 'error',
@@ -1283,41 +1274,69 @@ app.post<{
       });
     }
 
-    console.log(`📱 Sending message to group: ${group_link}`);
+    console.log(`📱 Sending message to group: ${group_name}`);
     if (message) console.log(`   Message: ${message}`);
     if (file) console.log(`   File: ${file}`);
 
-    // Navigate to the group link
-    await page.goto(group_link, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForTimeout(5000);
+    // Navigate to WhatsApp Web main page first
+    await page.goto('https://web.whatsapp.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(3000);
 
-    // Check if we need to join the group first (look for join button or "Join Group" text)
-    try {
-      // Try different selectors for join button
-      const joinSelectors = [
-        'div[role="button"]:has-text("Join group")',
-        'div[role="button"]:has-text("Join Group")',
-        'button:has-text("Join")',
-        'a:has-text("Join")',
-      ];
-      
-      for (const selector of joinSelectors) {
-        try {
-          const joinButton = page.locator(selector).first();
-          const isVisible = await joinButton.isVisible({ timeout: 2000 });
-          if (isVisible) {
-            console.log('   Clicking join button...');
-            await joinButton.click();
-            await page.waitForTimeout(5000);
-            break;
-          }
-        } catch (e) {
-          // Continue to next selector
-        }
+    // Click on search box and search for the group
+    const searchSelectors = [
+      'div[contenteditable="true"][data-tab="3"]',
+      'div[title="Search input textbox"]',
+      'div[data-testid="chat-list-search"]',
+    ];
+
+    let searchBox = null;
+    for (const selector of searchSelectors) {
+      try {
+        const box = page.locator(selector).first();
+        await box.waitFor({ state: 'visible', timeout: 5000 });
+        searchBox = box;
+        console.log(`   Found search box with selector: ${selector}`);
+        break;
+      } catch (e) {
+        console.log(`   Selector ${selector} not found, trying next...`);
       }
-    } catch (e) {
-      console.log('   Join button not found or already in group');
     }
+
+    if (!searchBox) {
+      return reply.code(500).send({
+        status: 'error',
+        message: 'Could not find search box. WhatsApp may not be fully loaded.',
+      });
+    }
+
+    // Search for the group
+    await searchBox.click();
+    await page.waitForTimeout(500);
+    await searchBox.fill(group_name);
+    await page.waitForTimeout(2000);
+
+    // Click on the group from search results
+    const groupResult = page.locator(`span[title="${group_name}"]`).first();
+    try {
+      await groupResult.waitFor({ state: 'visible', timeout: 5000 });
+      await groupResult.click();
+      console.log(`   Clicked on group: ${group_name}`);
+    } catch (e) {
+      // Try partial match
+      const partialMatch = page.locator(`span[title*="${group_name}"]`).first();
+      try {
+        await partialMatch.waitFor({ state: 'visible', timeout: 3000 });
+        await partialMatch.click();
+        console.log(`   Clicked on group (partial match): ${group_name}`);
+      } catch (e2) {
+        return reply.code(404).send({
+          status: 'error',
+          message: `Group "${group_name}" not found. Make sure you have joined the group first.`,
+        });
+      }
+    }
+
+    await page.waitForTimeout(2000);
 
     // Wait for the chat to fully load - try multiple message box selectors
     const messageBoxSelectors = [
@@ -1331,7 +1350,7 @@ app.post<{
     for (const selector of messageBoxSelectors) {
       try {
         const box = page.locator(selector).first();
-        await box.waitFor({ state: 'visible', timeout: 10000 });
+        await box.waitFor({ state: 'visible', timeout: 5000 });
         messageBox = box;
         console.log(`   Found message box with selector: ${selector}`);
         break;
@@ -1341,8 +1360,6 @@ app.post<{
     }
 
     if (!messageBox) {
-      // Take a screenshot for debugging
-      console.log('   Could not find message box, taking debug screenshot...');
       return reply.code(500).send({
         status: 'error',
         message: 'Could not find message input box. The group chat may not have loaded correctly.',
@@ -1397,7 +1414,7 @@ app.post<{
       return reply.code(200).send({
         status: 'success',
         message: 'File sent to group successfully',
-        group_link,
+        group_name,
         file,
         file_size: stats.size,
         full_path: filePath,
@@ -1419,7 +1436,7 @@ app.post<{
       return reply.code(200).send({
         status: 'success',
         message: 'Message sent to group successfully',
-        group_link,
+        group_name,
         text: message,
         timestamp: new Date().toISOString(),
       });
