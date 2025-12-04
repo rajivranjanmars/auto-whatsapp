@@ -1242,6 +1242,157 @@ app.post<{
   }
 });
 
+// Send message to WhatsApp group using invite link
+app.post<{
+  Body: {
+    group_link: string;
+    message?: string;
+    file?: string;
+  };
+}>('/send-group-message', async (request, reply) => {
+  try {
+    const { group_link, message, file } = request.body;
+
+    if (!group_link) {
+      return reply.code(400).send({
+        status: 'error',
+        message: 'Missing required field: group_link',
+      });
+    }
+
+    if (!message && !file) {
+      return reply.code(400).send({
+        status: 'error',
+        message: 'Either message or file must be provided',
+      });
+    }
+
+    // Validate group link format
+    const groupLinkRegex = /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+$/;
+    if (!groupLinkRegex.test(group_link)) {
+      return reply.code(400).send({
+        status: 'error',
+        message: 'Invalid WhatsApp group invite link format',
+      });
+    }
+
+    if (!page) {
+      return reply.code(503).send({
+        status: 'error',
+        message: 'WhatsApp page not initialized',
+      });
+    }
+
+    console.log(`📱 Sending message to group: ${group_link}`);
+    if (message) console.log(`   Message: ${message}`);
+    if (file) console.log(`   File: ${file}`);
+
+    // Navigate to the group link
+    await page.goto(group_link, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(3000);
+
+    // Check if we need to join the group first
+    try {
+      const joinButton = page.locator('button:has-text("Join Group"), button:has-text("Join group"), a:has-text("Join Group"), a:has-text("Join group")').first();
+      const isJoinVisible = await joinButton.isVisible({ timeout: 3000 });
+      
+      if (isJoinVisible) {
+        console.log('   Joining group...');
+        await joinButton.click();
+        await page.waitForTimeout(5000);
+      }
+    } catch (e) {
+      console.log('   Already in group or join button not found');
+    }
+
+    // Wait for chat to load
+    await page.waitForTimeout(2000);
+
+    // If file is provided, send it with optional caption
+    if (file) {
+      const filePath = path.isAbsolute(file) ? file : path.join(DATA_DIR, file);
+      
+      if (!fs.existsSync(filePath)) {
+        return reply.code(404).send({
+          status: 'error',
+          message: 'File not found',
+          file: file,
+          full_path: filePath,
+        });
+      }
+
+      const stats = fs.statSync(filePath);
+      console.log(`   Attaching file (${stats.size} bytes)...`);
+
+      // Click attach button
+      const attachButton = page.locator('span[data-icon="plus"], span[data-icon="attach-menu-plus"]').first();
+      await attachButton.click();
+      await page.waitForTimeout(1000);
+
+      // Click document/photo option based on file type
+      const fileExt = path.extname(filePath).toLowerCase();
+      const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(fileExt);
+      
+      const fileInputSelector = isImage 
+        ? 'input[accept*="image"]'
+        : 'input[accept*="*"]';
+      
+      const fileInput = page.locator(fileInputSelector).first();
+      await fileInput.setInputFiles(filePath);
+      await page.waitForTimeout(2000);
+
+      // Add caption if provided
+      if (message) {
+        const captionBox = page.locator('div[contenteditable="true"][data-tab="10"]').first();
+        await captionBox.fill(message);
+        await page.waitForTimeout(500);
+      }
+
+      // Click send button
+      const sendButton = page.locator('span[data-icon="send"]').first();
+      await sendButton.click();
+      await page.waitForTimeout(2000);
+
+      return reply.code(200).send({
+        status: 'success',
+        message: 'File sent to group successfully',
+        group_link,
+        file,
+        file_size: stats.size,
+        full_path: filePath,
+        caption: message || null,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      // Send text message only
+      const messageBox = page.locator('div[contenteditable="true"][data-tab="10"]').first();
+      await messageBox.waitFor({ state: 'visible', timeout: 10000 });
+      await messageBox.fill(message!);
+      await page.waitForTimeout(500);
+
+      // Click send button
+      const sendButton = page.locator('span[data-icon="send"]').first();
+      await sendButton.click();
+      await page.waitForTimeout(2000);
+
+      return reply.code(200).send({
+        status: 'success',
+        message: 'Message sent to group successfully',
+        group_link,
+        text: message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  } catch (error) {
+    console.error('Error in /send-group-message endpoint:', error);
+    return reply.code(500).send({
+      status: 'error',
+      message: 'Failed to send message to group',
+      error: String(error),
+    });
+  }
+});
+
 // Get QR code endpoint
 app.get('/qr', async (request, reply) => {
   try {
