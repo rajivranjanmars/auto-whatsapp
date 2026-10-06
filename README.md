@@ -8,4 +8,4 @@ Use Node.js 22 or later. Run `npm ci`, then `npx playwright install chromium`, a
 
 ## Author
 
-Author: [rajivranjanmars](https://rajivranjana.in).
+Author: [Rajiv Ranjan](https://rajivranjan.in).
