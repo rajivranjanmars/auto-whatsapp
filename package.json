@@ -23,7 +23,7 @@
   "license": "MIT",
   "dependencies": {
     "@playwright/browser-chromium": "1.63.0",
-    "playwright": "1.63.0",
+    "playwright": "1.64.0",
     "fastify": "^5.12.1",
     "@fastify/cors": "^11.0.0",
     "@fastify/multipart": "^10.1.2"
